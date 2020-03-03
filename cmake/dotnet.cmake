@@ -26,7 +26,7 @@ file(GLOB_RECURSE proto_dotnet_files RELATIVE ${PROJECT_SOURCE_DIR}
   "ortools/util/*.proto"
   )
 list(REMOVE_ITEM proto_dotnet_files "ortools/constraint_solver/demon_profiler.proto")
-foreach(PROTO_FILE ${proto_dotnet_files})
+foreach(PROTO_FILE IN LISTS proto_dotnet_files)
   #message(STATUS "protoc proto(dotnet): ${PROTO_FILE}")
   get_filename_component(PROTO_DIR ${PROTO_FILE} DIRECTORY)
   get_filename_component(PROTO_NAME ${PROTO_FILE} NAME_WE)
@@ -104,9 +104,14 @@ elseif(WIN32)
 else()
   message(FATAL_ERROR "Unsupported system !")
 endif()
-set(OR_TOOLS_DOTNET_NATIVE Google.OrTools.runtime.${RUNTIME_IDENTIFIER})
+set(OR_TOOLS_DOTNET_NATIVE ${OR_TOOLS_DOTNET}.runtime.${RUNTIME_IDENTIFIER})
 
-add_custom_target(dotnet_native
+configure_file(
+  ortools/dotnet/${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj.in
+  dotnet/${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj
+  @ONLY)
+
+add_custom_target(dotnet_native ALL
   DEPENDS
     dotnet/or-tools.snk
     Dotnet${PROJECT_NAME}_proto
@@ -117,11 +122,6 @@ add_custom_target(dotnet_native
   COMMAND ${DOTNET_CLI} pack -c Release ${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj
   WORKING_DIRECTORY dotnet
   )
-
-configure_file(
-  ortools/dotnet/${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj.in
-  dotnet/${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj
-  @ONLY)
 
 
 # Main Target
