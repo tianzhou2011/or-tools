@@ -17,6 +17,14 @@ if(UNIX AND NOT APPLE)
   list(APPEND CMAKE_SWIG_FLAGS "-DSWIGWORDSIZE64")
 endif()
 
+# Setup Dotnet
+find_program (DOTNET_CLI NAMES dotnet)
+if(NOT DOTNET_EXECUTABLE)
+  message(FATAL_ERROR "Check for dotnet Program: not found")
+else()
+  message(STATUS "Found dotnet Program: ${DOTNET_EXECUTABLE}")
+endif()
+
 # Generate Protobuf .Net sources
 set(PROTO_DOTNETS)
 file(GLOB_RECURSE proto_dotnet_files RELATIVE ${PROJECT_SOURCE_DIR}
@@ -47,24 +55,16 @@ foreach(PROTO_FILE IN LISTS proto_dotnet_files)
 endforeach()
 add_custom_target(Dotnet${PROJECT_NAME}_proto DEPENDS ${PROTO_DOTNETS} ortools::ortools)
 
-# Setup Dotnet
-find_program (DOTNET_CLI NAMES dotnet)
+# Create the native library
+add_library(google-ortools-native SHARED "")
+set_target_properties(google-ortools-native PROPERTIES
+  PREFIX "")
 
-# CMake will remove all '-D' prefix (i.e. -DUSE_FOO become USE_FOO)
-#get_target_property(FLAGS ortools::ortools COMPILE_DEFINITIONS)
-set(FLAGS -DUSE_BOP -DUSE_GLOP -DABSL_MUST_USE_RESULT)
-if(USE_COINOR)
-  list(APPEND FLAGS
-    "-DUSE_CBC"
-    "-DUSE_CLP"
-    )
-endif()
-list(APPEND CMAKE_SWIG_FLAGS ${FLAGS} "-I${PROJECT_SOURCE_DIR}")
-
+# Swig wrap all libraries
 set(OR_TOOLS_DOTNET Google.OrTools)
 foreach(SUBPROJECT IN ITEMS algorithms graph linear_solver constraint_solver sat util)
   add_subdirectory(ortools/${SUBPROJECT}/csharp)
-  list(APPEND dotnet_native_targets dotnet_${SUBPROJECT})
+  target_link_libraries(google-ortools-native PRIVATE dotnet_${SUBPROJECT})
 endforeach()
 
 ############################
@@ -106,17 +106,32 @@ else()
 endif()
 set(OR_TOOLS_DOTNET_NATIVE ${OR_TOOLS_DOTNET}.runtime.${RUNTIME_IDENTIFIER})
 
-configure_file(
-  ortools/dotnet/${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj.in
-  dotnet/${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj
-  @ONLY)
+
+file(GENERATE OUTPUT dotnet/replace_runtime.cmake
+  CONTENT
+  "FILE(READ ${PROJECT_SOURCE_DIR}/ortools/dotnet/${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj.in input)
+STRING(REPLACE \"@PROJECT_VERSION@\" \"${PROJECT_VERSION}\" input \"\${input}\")
+STRING(REPLACE \"@RUNTIME_IDENTIFIER@\" \"${RUNTIME_IDENTIFIER}\" input \"\${input}\")
+STRING(REPLACE \"@OR_TOOLS_DOTNET@\" \"${OR_TOOLS_DOTNET}\" input \"\${input}\")
+STRING(REPLACE \"@OR_TOOLS_DOTNET_NATIVE@\" \"${OR_TOOLS_DOTNET_NATIVE}\" input \"\${input}\")
+STRING(REPLACE \"@ortools@\" \"$<TARGET_FILE:${PROJECT_NAME}>\" input \"\${input}\")
+STRING(REPLACE \"@native@\" \"$<TARGET_FILE:google-ortools-native>\" input \"\${input}\")
+FILE(WRITE ${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj \"\${input}\")"
+)
+
+add_custom_command(
+  OUTPUT dotnet/${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${OR_TOOLS_DOTNET_NATIVE}
+  COMMAND ${CMAKE_COMMAND} -P $<$<BOOL:${GENERATOR_IS_MULTI_CONFIG}>:$<CONFIG>/>replace_runtime.cmake
+  WORKING_DIRECTORY dotnet
+  )
 
 add_custom_target(dotnet_native ALL
   DEPENDS
     dotnet/or-tools.snk
     Dotnet${PROJECT_NAME}_proto
-    ${dotnet_native_targets}
-    ${PROJECT_BINARY_DIR}/dotnet/${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj
+    google-ortools-native
+    dotnet/${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj
   COMMAND ${CMAKE_COMMAND} -E make_directory packages
   COMMAND ${DOTNET_CLI} build -c Release /p:Platform=x64 ${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj
   COMMAND ${DOTNET_CLI} pack -c Release ${OR_TOOLS_DOTNET_NATIVE}/${OR_TOOLS_DOTNET_NATIVE}.csproj
@@ -125,23 +140,33 @@ add_custom_target(dotnet_native ALL
 
 
 # Main Target
+file(GENERATE OUTPUT dotnet/$<$<BOOL:${GENERATOR_IS_MULTI_CONFIG}>:$<CONFIG>/>replace.cmake
+  CONTENT
+  "FILE(READ ${PROJECT_SOURCE_DIR}/dotnet/${OR_TOOLS_DOTNET}.csproj.in input)
+STRING(REPLACE \"@PROJECT_VERSION@\" \"${PROJECT_VERSION}\" input \"\${input}\")
+STRING(REPLACE \"@OR_TOOLS_DOTNET@\" \"${OR_TOOLS_DOTNET}\" input \"\${input}\")
+STRING(REPLACE \"@DOTNET_PACKAGES_DIR@\" \"${PROJECT_BINARY_DIR}/dotnet/packages\" input \"\${input}\")
+FILE(WRITE ${OR_TOOLS_DOTNET}/${OR_TOOLS_DOTNET}.csproj \"\${input}\")"
+)
+
+add_custom_command(
+  OUTPUT dotnet/${OR_TOOLS_DOTNET}/${OR_TOOLS_DOTNET}.csproj
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${OR_TOOLS_DOTNET}
+  COMMAND ${CMAKE_COMMAND} -P $<$<BOOL:${GENERATOR_IS_MULTI_CONFIG}>:$<CONFIG>/>replace.cmake
+  WORKING_DIRECTORY dotnet
+  )
 
 add_custom_target(dotnet_package ALL
   DEPENDS
     dotnet/or-tools.snk
     dotnet_native
-    ${PROJECT_BINARY_DIR}/dotnet/${OR_TOOLS_DOTNET}/${OR_TOOLS_DOTNET}.csproj
+    dotnet/${OR_TOOLS_DOTNET}/${OR_TOOLS_DOTNET}.csproj
   COMMAND ${DOTNET_CLI} build -c Release /p:Platform=x64 ${OR_TOOLS_DOTNET}/${OR_TOOLS_DOTNET}.csproj
   COMMAND ${DOTNET_CLI} pack -c Release ${OR_TOOLS_DOTNET}/${OR_TOOLS_DOTNET}.csproj
   BYPRODUCTS
     dotnet/packages
   WORKING_DIRECTORY dotnet
   )
-
-configure_file(
-  ortools/dotnet/${OR_TOOLS_DOTNET}/${OR_TOOLS_DOTNET}.csproj.in
-  dotnet/${OR_TOOLS_DOTNET}/${OR_TOOLS_DOTNET}.csproj
-  @ONLY)
 
 # Test
 if(BUILD_TESTING)
