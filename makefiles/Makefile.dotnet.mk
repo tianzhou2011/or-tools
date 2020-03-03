@@ -73,7 +73,7 @@ OR_TOOLS_NATIVE_LIB := google-ortools-native
 OR_TOOLS_FSHARP_ASSEMBLY_NAME := $(OR_TOOLS_ASSEMBLY_NAME).FSharp
 OR_TOOLS_FSHARP_TESTS_ASSEMBLY_NAME := $(OR_TOOLS_ASSEMBLY_NAME).FSharp.Tests
 DOTNET_ORTOOLS_NUPKG := $(PACKAGE_DIR)/$(OR_TOOLS_ASSEMBLY_NAME).$(OR_TOOLS_VERSION).nupkg
-DOTNET_ORTOOLS_NATIVE_NUPKG := $(PACKAGE_DIR)/$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).$(OR_TOOLS_VERSION).nupkg
+DOTNET_ORTOOLS_RUNTIME_NUPKG := $(PACKAGE_DIR)/$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).$(OR_TOOLS_VERSION).nupkg
 DOTNET_ORTOOLS_FSHARP_NUPKG := $(PACKAGE_DIR)/$(OR_TOOLS_FSHARP_ASSEMBLY_NAME).$(OR_TOOLS_VERSION).nupkg
 NUGET_PACK_ARGS := -c Release
 DOTNET_BUILD_ARGS := -c Release /p:Platform=x64
@@ -82,7 +82,7 @@ DOTNET_BUILD_ARGS := -c Release /p:Platform=x64
 ##  RUNTIME CSHARP  ##
 ######################
 .PHONY: dotnet_runtime # Build C# runtime OR-Tools
-dotnet_runtime: $(DOTNET_ORTOOLS_NATIVE_NUPKG)
+dotnet_runtime: $(DOTNET_ORTOOLS_RUNTIME_NUPKG)
 
 ###################################################################
 # Protobuf: generate C# cs files from proto specification files. ##
@@ -331,14 +331,27 @@ $(LIB_DIR)/$(OR_TOOLS_NATIVE_LIB).$(SWIG_DOTNET_LIB_SUFFIX): \
 $(SRC_DIR)/ortools/dotnet/orLogo.png: $(SRC_DIR)/tools/doc/orLogo.png
 	$(COPY) $(SRC_DIR)$Stools$Sdoc$SorLogo.png $(SRC_DIR)$Sortools$Sdotnet$SorLogo.png
 
+$(SRC_DIR)/ortools/dotnet/Directory.Build.props: $(SRC_DIR)/ortools/dotnet/Directory.Build.props.in
+	$(COPY) $(SRC_DIR)$Sortools$Sdotnet$SDirectory.Build.props.in $(SRC_DIR)$Sortools$Sdotnet$SDirectory.Build.props
+	$(SED) -i -e 's/@DOTNET_PACKAGES_DIR@/..\/..\/..\/packages/g' $(SRC_DIR)$Sortools$Sdotnet$SDirectory.Build.props
+
 $(SRC_DIR)/ortools/dotnet/$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)/$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).csproj: \
  $(SRC_DIR)/ortools/dotnet/$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)/$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).csproj.in
 	$(SED) -e "s/@PROJECT_VERSION@/$(OR_TOOLS_VERSION)/" \
  ortools$Sdotnet$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).csproj.in \
  > ortools$Sdotnet$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).csproj
+	$(SED) -i -e 's/@DOTNET_PACKAGES_DIR@/..\/..\/..\/packages/' \
+ ortools$Sdotnet$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).csproj
+	$(SED) -i -e 's/@dependencies@/..\/..\/..\/dependencies\/install\/lib*\/*.$L*/' \
+ ortools$Sdotnet$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).csproj
+	$(SED) -i -e 's/@native@/..\/..\/..\/lib\/$(OR_TOOLS_NATIVE_LIB).$(SWIG_DOTNET_LIB_SUFFIX)/' \
+ ortools$Sdotnet$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).csproj
+	$(SED) -i -e 's/@ortools@/..\/..\/..\/lib\/$(LIB_PREFIX)ortools.$L/' \
+ ortools$Sdotnet$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).csproj
 
-$(DOTNET_ORTOOLS_NATIVE_NUPKG): \
+$(DOTNET_ORTOOLS_RUNTIME_NUPKG): \
  $(LIB_DIR)/$(OR_TOOLS_NATIVE_LIB).$(SWIG_DOTNET_LIB_SUFFIX) \
+ $(SRC_DIR)/ortools/dotnet/Directory.Build.props \
  $(SRC_DIR)/ortools/dotnet/orLogo.png \
  $(SRC_DIR)/ortools/dotnet/$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)/$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME).csproj \
  $(SRC_DIR)/ortools/constraint_solver/csharp/IntVarArrayHelper.cs \
@@ -381,10 +394,12 @@ $(SRC_DIR)/ortools/dotnet/$(OR_TOOLS_ASSEMBLY_NAME)/$(OR_TOOLS_ASSEMBLY_NAME).cs
 	$(SED) -e "s/@PROJECT_VERSION@/$(OR_TOOLS_VERSION)/" \
  ortools$Sdotnet$S$(OR_TOOLS_ASSEMBLY_NAME)$S$(OR_TOOLS_ASSEMBLY_NAME).csproj.in \
  > ortools$Sdotnet$S$(OR_TOOLS_ASSEMBLY_NAME)$S$(OR_TOOLS_ASSEMBLY_NAME).csproj
+	$(SED) -i -e 's/@DOTNET_PACKAGES_DIR@/..\/..\/..\/packages/' \
+ ortools$Sdotnet$S$(OR_TOOLS_ASSEMBLY_NAME)$S$(OR_TOOLS_ASSEMBLY_NAME).csproj
 
 # Pack managed project nuget
 $(DOTNET_ORTOOLS_NUPKG): \
- $(DOTNET_ORTOOLS_NATIVE_NUPKG) \
+ $(DOTNET_ORTOOLS_RUNTIME_NUPKG) \
  $(SRC_DIR)/ortools/dotnet/$(OR_TOOLS_ASSEMBLY_NAME)/$(OR_TOOLS_ASSEMBLY_NAME).csproj \
  | $(DOTNET_ORTOOLS_SNK) $(PACKAGE_DIR)
 	"$(DOTNET_BIN)" build $(DOTNET_BUILD_ARGS) ortools$Sdotnet$S$(OR_TOOLS_ASSEMBLY_NAME)
@@ -402,6 +417,8 @@ $(SRC_DIR)/ortools/dotnet/$(OR_TOOLS_FSHARP_ASSEMBLY_NAME)/$(OR_TOOLS_FSHARP_ASS
 	$(SED) -e "s/@PROJECT_VERSION@/$(OR_TOOLS_VERSION)/" \
  ortools$Sdotnet$S$(OR_TOOLS_FSHARP_ASSEMBLY_NAME)$S$(OR_TOOLS_FSHARP_ASSEMBLY_NAME).fsproj.in \
  > ortools$Sdotnet$S$(OR_TOOLS_FSHARP_ASSEMBLY_NAME)$S$(OR_TOOLS_FSHARP_ASSEMBLY_NAME).fsproj
+	$(SED) -i -e 's/@DOTNET_PACKAGES_DIR@/..\/..\/..\/packages/' \
+ ortools$Sdotnet$S$(OR_TOOLS_FSHARP_ASSEMBLY_NAME)$S$(OR_TOOLS_FSHARP_ASSEMBLY_NAME).fsproj
 
 # build and pack nuget
 $(DOTNET_ORTOOLS_FSHARP_NUPKG): \
@@ -417,6 +434,8 @@ ortools/dotnet/$(OR_TOOLS_FSHARP_TESTS_ASSEMBLY_NAME)/$(OR_TOOLS_FSHARP_TESTS_AS
 	$(SED) -e "s/@PROJECT_VERSION@/$(OR_TOOLS_VERSION)/" \
  ortools$Sdotnet$S$(OR_TOOLS_FSHARP_TESTS_ASSEMBLY_NAME)$S$(OR_TOOLS_FSHARP_TESTS_ASSEMBLY_NAME).fsproj.in \
  > ortools$Sdotnet$S$(OR_TOOLS_FSHARP_TESTS_ASSEMBLY_NAME)$S$(OR_TOOLS_FSHARP_TESTS_ASSEMBLY_NAME).fsproj
+	$(SED) -i -e 's/@DOTNET_PACKAGES_DIR@/..\/..\/..\/packages/' \
+ ortools$Sdotnet$S$(OR_TOOLS_FSHARP_TESTS_ASSEMBLY_NAME)$S$(OR_TOOLS_FSHARP_TESTS_ASSEMBLY_NAME).fsproj
 
 .PHONY: test_dotnet_fsharp # Run F# OrTools Tests
 test_dotnet_fsharp: $(DOTNET_ORTOOLS_FSHARP_NUPKG) \
@@ -699,6 +718,7 @@ clean_dotnet:
 	-$(DELREC) ortools$Sdotnet$SCreateSigningKey$Sobj
 	-$(DEL) $(DOTNET_ORTOOLS_SNK_PATH)
 	-$(DEL) ortools$Sdotnet$SorLogo.png
+	-$(DEL) ortools$Sdotnet$SDirectory.Build.props
 	-$(DEL) ortools$Sdotnet$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)*.csproj
 	-$(DELREC) ortools$Sdotnet$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)$Sbin
 	-$(DELREC) ortools$Sdotnet$S$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)$Sobj
@@ -783,7 +803,7 @@ detect_dotnet:
 	@echo SWIG_DOTNET_LIB_SUFFIX = $(SWIG_DOTNET_LIB_SUFFIX)
 	@echo OR_TOOLS_NATIVE_LIB = $(OR_TOOLS_NATIVE_LIB)
 	@echo OR_TOOLS_RUNTIME_ASSEMBLY_NAME =$(OR_TOOLS_RUNTIME_ASSEMBLY_NAME)
-	@echo DOTNET_ORTOOLS_NATIVE_NUPKG = $(DOTNET_ORTOOLS_NATIVE_NUPKG)
+	@echo DOTNET_ORTOOLS_RUNTIME_NUPKG = $(DOTNET_ORTOOLS_RUNTIME_NUPKG)
 	@echo OR_TOOLS_ASSEMBLY_NAME = $(OR_TOOLS_ASSEMBLY_NAME)
 	@echo DOTNET_ORTOOLS_NUPKG = $(DOTNET_ORTOOLS_NUPKG)
 	@echo OR_TOOLS_FSHARP_ASSEMBLY_NAME = $(OR_TOOLS_FSHARP_ASSEMBLY_NAME)

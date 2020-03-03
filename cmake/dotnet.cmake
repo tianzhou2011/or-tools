@@ -71,7 +71,8 @@ endforeach()
 ##  .Net Runtime Package  ##
 ############################
 file(COPY tools/doc/orLogo.png DESTINATION dotnet)
-file(COPY ortools/dotnet/Directory.Build.props DESTINATION dotnet)
+set(DOTNET_PACKAGES_DIR "../packages")
+configure_file(ortools/dotnet/Directory.Build.props.in dotnet/Directory.Build.props)
 
 # Build or retrieve .snk file
 if(DEFINED ENV{DOTNET_SNK})
